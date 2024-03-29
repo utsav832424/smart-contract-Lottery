@@ -35,6 +35,18 @@ import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBa
 
 contract Raffle is VRFConsumerBaseV2 {
     error Raffle__NotEnoughEthSent();
+    error Raffle__TransferFailed();
+    error Raffle__RaffleNotOpen();
+    error Raffle__UpkeepNotNeeded(
+        uint256 currentBalance,
+        uint256 numPlayers,
+        uint256 raffleState
+    );
+
+    enum RaffleState {
+        OPEN,
+        CALCULATING
+    }
 
     uint16 private constant requestConfirmations = 3;
     uint32 private constant numWords = 1;
@@ -48,9 +60,12 @@ contract Raffle is VRFConsumerBaseV2 {
 
     address payable[] private s_players;
     uint256 private s_lastTimeStamp;
+    address private s_lastRecentWinner;
+    RaffleState private s_raffleState;
 
     /** Events */
     event EnterdRaffle(address indexed player);
+    event PickedWinner(address indexed winner);
 
     constructor(
         uint256 entranceFee,
@@ -67,25 +82,59 @@ contract Raffle is VRFConsumerBaseV2 {
         i_subscriptionId = subscriptionId;
         i_callbackGasLimit = callbackGasLimit;
         s_lastTimeStamp = block.timestamp;
+        s_raffleState = RaffleState.OPEN;
     }
 
     function enterRaffle() public payable {
         if (msg.value < i_entranceFee) {
             revert Raffle__NotEnoughEthSent();
         }
+        if (s_raffleState != RaffleState.OPEN) {
+            revert Raffle__RaffleNotOpen();
+        }
         s_players.push(payable(msg.sender));
         emit EnterdRaffle(msg.sender);
+    }
+
+    /**
+     * @dev This is the function that the Chainlink Automation nodes call
+     * to see if it's time to perform an unkeep.
+     * The Following should be true for this to return true:
+     * 1. The Time interval has passed between raffle runs
+     * 2. The raffle is in the OPEN state
+     * 3. The contract has ETH (aka,players)
+     * 4. The Subscription is funded with LINK
+     */
+
+    function checkUpkeep(
+        bytes memory /* checkData */
+    ) public view returns (bool upkeepNeeded, bytes memory /* performData */) {
+        bool timeHasPassed = (block.timestamp - s_lastTimeStamp) >= i_interval;
+        bool isOpenState = RaffleState.OPEN == s_raffleState;
+        bool hasBalance = address(this).balance > 0;
+        bool hasPlayers = s_players.length > 0;
+        upkeepNeeded = (timeHasPassed &&
+            isOpenState &&
+            hasBalance &&
+            hasPlayers);
+        return (upkeepNeeded, "0x0");
     }
 
     // Get a Random Number
     // Use a Random number to pick a player
     // Be automatically called
-    function pickWinner() external {
-        // check to see if enough time has passed
-        if ((block.timestamp - s_lastTimeStamp) <= i_interval) {
-            revert();
+    function performUpkeep(bytes calldata /* performData */) external {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded) {
+            revert Raffle__UpkeepNotNeeded(
+                address(this).balance,
+                s_players.length,
+                uint256(s_raffleState)
+            );
         }
-        uint256 requestId = i_vrfCoordinator.requestRandomWords(
+        // check to see if enough time has passed
+        s_raffleState = RaffleState.CALCULATING;
+        i_vrfCoordinator.requestRandomWords(
             i_keyHash,
             i_subscriptionId,
             requestConfirmations,
@@ -95,9 +144,20 @@ contract Raffle is VRFConsumerBaseV2 {
     }
 
     function fulfillRandomWords(
-        uint256 _requestId,
+        uint256 /*_requestId*/,
         uint256[] memory _randomWords
-    ) internal override {}
+    ) internal override {
+        uint256 indexOfWinner = _randomWords[0] % s_players.length;
+        address payable winner = s_players[indexOfWinner];
+        s_lastRecentWinner = winner;
+        s_raffleState = RaffleState.OPEN;
+        s_lastTimeStamp = block.timestamp;
+        (bool success, ) = winner.call{value: address(this).balance}("");
+        if (!success) {
+            revert Raffle__TransferFailed();
+        }
+        emit PickedWinner(winner);
+    }
 
     /** Getter Function */
 
