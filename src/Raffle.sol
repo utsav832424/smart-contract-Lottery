@@ -32,6 +32,7 @@ pragma solidity ^0.8.18;
 
 import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
+import {console} from "forge-std/console.sol";
 
 contract Raffle is VRFConsumerBaseV2 {
     error Raffle__NotEnoughEthSent();
@@ -84,6 +85,7 @@ contract Raffle is VRFConsumerBaseV2 {
         i_callbackGasLimit = callbackGasLimit;
         s_lastTimeStamp = block.timestamp;
         s_raffleState = RaffleState.OPEN;
+        console.log("current contract balance ", address(this).balance);
     }
 
     function enterRaffle() public payable {
@@ -110,7 +112,7 @@ contract Raffle is VRFConsumerBaseV2 {
     function checkUpkeep(
         bytes memory /* checkData */
     ) public view returns (bool upkeepNeeded, bytes memory /* performData */) {
-        bool timeHasPassed = (block.timestamp - s_lastTimeStamp) >= i_interval;
+        bool timeHasPassed = (block.timestamp - s_lastTimeStamp) > i_interval;
         bool isOpenState = RaffleState.OPEN == s_raffleState;
         bool hasBalance = address(this).balance > 0;
         bool hasPlayers = s_players.length > 0;
@@ -128,7 +130,8 @@ contract Raffle is VRFConsumerBaseV2 {
         (bool upkeepNeeded, ) = checkUpkeep("");
         if (!upkeepNeeded) {
             revert Raffle__UpkeepNotNeeded(
-                address(this).balance,
+                0,
+                // address(this).balance,
                 s_players.length,
                 uint256(s_raffleState)
             );

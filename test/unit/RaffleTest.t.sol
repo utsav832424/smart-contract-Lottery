@@ -35,7 +35,8 @@ contract RaffleTest is Test {
             keyHash,
             subscriptionId,
             callbackGasLimit,
-            link
+            link,
+
         ) = helperConfig.activeNetworkConfig();
         vm.deal(PLAYER, STARTING_BALANCE);
     }
@@ -116,17 +117,17 @@ contract RaffleTest is Test {
 
     function testPerformupkeepRevertsIfCheckupkeepFalse() public {
         // Arrange
-        uint256 currentbalnce = 0;
+        uint256 currentbalance = 0;
         uint256 numPlayers = 0;
-        uint256 raffleState = 0;
+        Raffle.RaffleState raffleState = raffle.getRaffleState();
 
         // Act / Assert
         vm.expectRevert(
             abi.encodeWithSelector(
                 Raffle.Raffle__UpkeepNotNeeded.selector,
-                currentbalnce,
+                currentbalance,
                 numPlayers,
-                raffleState
+                uint256(raffleState)
             )
         );
         raffle.performUpkeep("");
@@ -140,7 +141,7 @@ contract RaffleTest is Test {
         _;
     }
 
-    function testPerformupkeepUpdatesRafflestateAndEmitsEvents()
+    function testPerformupkeepUpdatesRafflestateAndEmitsRequestId()
         public
         raffleEnterAndTimePassed
     {
@@ -157,10 +158,17 @@ contract RaffleTest is Test {
         assert(uint256(rState) == 1);
     }
 
+    modifier skipFork() {
+        if (block.chainid != 31337) {
+            return;
+        }
+        _;
+    }
+
     // Fuzz Test
     function testFullfilRandomWordsBeCalledAfterPerformupkeep(
         uint256 randomRequestId
-    ) public raffleEnterAndTimePassed {
+    ) public raffleEnterAndTimePassed skipFork {
         vm.expectRevert("nonexistent request");
         VRFCoordinatorV2Mock(vrfCoordinator).fulfillRandomWords(
             randomRequestId,
@@ -171,6 +179,7 @@ contract RaffleTest is Test {
     function testFullFillRandomWordsPicksAWinnerResetAndSendsMoney()
         public
         raffleEnterAndTimePassed
+        skipFork
     {
         // Arrange
         uint256 additionalEntrants = 5;
