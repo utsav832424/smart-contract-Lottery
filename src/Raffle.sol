@@ -66,6 +66,7 @@ contract Raffle is VRFConsumerBaseV2 {
     /** Events */
     event EnterdRaffle(address indexed player);
     event PickedWinner(address indexed winner);
+    event RequestRaffleWinner(uint256 indexed requestId);
 
     constructor(
         uint256 entranceFee,
@@ -134,13 +135,14 @@ contract Raffle is VRFConsumerBaseV2 {
         }
         // check to see if enough time has passed
         s_raffleState = RaffleState.CALCULATING;
-        i_vrfCoordinator.requestRandomWords(
+        uint256 requestId = i_vrfCoordinator.requestRandomWords(
             i_keyHash,
             i_subscriptionId,
             requestConfirmations,
             i_callbackGasLimit,
             numWords
         );
+        emit RequestRaffleWinner(requestId);
     }
 
     function fulfillRandomWords(
@@ -151,6 +153,7 @@ contract Raffle is VRFConsumerBaseV2 {
         address payable winner = s_players[indexOfWinner];
         s_lastRecentWinner = winner;
         s_raffleState = RaffleState.OPEN;
+        s_players = new address payable[](0);
         s_lastTimeStamp = block.timestamp;
         (bool success, ) = winner.call{value: address(this).balance}("");
         if (!success) {
@@ -171,5 +174,17 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function getPlayers(uint256 indexOfPlayer) external view returns (address) {
         return s_players[indexOfPlayer];
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return s_lastRecentWinner;
+    }
+
+    function getLengthOfPlayers() external view returns (uint256) {
+        return s_players.length;
+    }
+
+    function getLastTimeStamp() external view returns (uint256) {
+        return s_lastTimeStamp;
     }
 }
