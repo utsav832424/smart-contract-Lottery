@@ -21,3 +21,8 @@ This Project is to create a random smart contract lottery.
     1. Work on a local chain
     2. Forked Testnet
     3. Forked Mainnet
+
+## Notes
+    - I deploy This contract on sepolia testnet and it is also verified.
+    - You can interact with my Raffle Contract on https://sepolia.etherscan.io
+    - Contract Address on sepolia : 0x2A9cA0491F6C39e0aB2bC43E5adE3A0477c7B827
