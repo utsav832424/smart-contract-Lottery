@@ -1,4 +1,8 @@
+# Random Raffle Contracts
 
+## About
+
+This Project is to create a random smart contract lottery.
 
 ## What we want it to do?
 
